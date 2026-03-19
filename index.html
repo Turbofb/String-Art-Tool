@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>String Art Pro v5 - Dark Mode</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* CSS Variables - The "buckets" for our colors */
+        :root {
+            --bg-color: #f1f5f9;      /* slate-100 */
+            --card-bg: #ffffff;
+            --text-main: #1e293b;    /* slate-800 */
+            --peg-color: #64748b;    /* slate-500 */
+            --hist-line: rgba(0, 0, 0, 0.08);
+            --circle-bg: #f8fafc;
+            --label-color: #94a3b8;
+        }
+
+        .dark-mode {
+            --bg-color: #0f172a;      /* slate-900 */
+            --card-bg: #1e293b;       /* slate-800 */
+            --text-main: #f1f5f9;     /* slate-100 */
+            --peg-color: #94a3b8;     /* slate-400 */
+            --hist-line: rgba(255, 255, 255, 0.12);
+            --circle-bg: #334155;     /* slate-700 */
+            --label-color: #64748b;   /* slate-500 */
+        }
+
+        body { background-color: var(--bg-color); color: var(--text-main); transition: all 0.3s ease; }
+        .app-card { background-color: var(--card-bg); transition: all 0.3s ease; }
+        .peg { fill: var(--peg-color); }
+        .active-peg { fill: #ef4444; r: 6; filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.8)); }
+        .current-line { stroke: #ef4444; stroke-width: 2.5; stroke-linecap: round; }
+        .historic-line { stroke: var(--hist-line); stroke-width: 0.4; }
+        .peg-label { font-family: ui-monospace, monospace; fill: var(--label-color); user-select: none; transition: fill 0.3s; }
+        .peg-label.active { fill: #ef4444; font-size: 11px; font-weight: 800; }
+        .circle-base { fill: var(--circle-bg); stroke: var(--label-color); stroke-width: 0.5; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4 md:p-8">
+
+    <div class="max-w-2xl w-full app-card rounded-2xl shadow-2xl border border-slate-700/10 overflow-hidden">
+        <div class="bg-slate-800 p-6 text-white flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold">String Art Helper v5</h1>
+                <p class="text-slate-400 text-xs">Progress & Theme Saved</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="toggleDarkMode()" id="theme-toggle" class="p-2 bg-slate-700 hover:bg-slate-600 rounded-full transition" title="Toggle Light/Dark Mode">
+                    <span id="theme-icon">🌙</span>
+                </button>
+                <button onclick="resetEverything()" class="text-xs bg-red-900/30 hover:bg-red-900 px-3 py-1 rounded transition border border-red-500/30">Reset</button>
+            </div>
+        </div>
+
+        <div class="p-6">
+            <div id="setup-area">
+                <label class="block text-sm font-semibold mb-2">Paste Numerical Sequence:</label>
+                <textarea id="sequence-input" class="w-full h-40 p-4 border border-slate-300 rounded-xl mb-4 font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-transparent" placeholder="Paste numbers here..."></textarea>
+                
+                <div class="flex items-center gap-4 mb-6">
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-1">Total Pegs</label>
+                        <input type="number" id="total-pegs" value="288" class="border border-slate-300 p-2 rounded-lg w-24 font-bold text-center bg-transparent">
+                    </div>
+                    <button onclick="startProject()" class="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 shadow-lg mt-4">Start Weaving</button>
+                </div>
+            </div>
+
+            <div id="controls" class="hidden">
+                <div class="flex justify-around items-center mb-6 bg-slate-500/5 p-6 rounded-2xl border border-slate-500/10">
+                    <div class="text-center">
+                        <span class="block text-[10px] uppercase tracking-widest opacity-50 font-bold mb-1">From Peg</span>
+                        <div id="from-display" class="text-5xl font-black tracking-tighter">-</div>
+                    </div>
+                    <div class="text-blue-500 animate-pulse">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m9 18 6-6-6-6"/></svg>
+                    </div>
+                    <div class="text-center">
+                        <span class="block text-[10px] uppercase tracking-widest opacity-50 font-bold mb-1">Go to</span>
+                        <div id="to-display" class="text-5xl font-black text-red-500 tracking-tighter">-</div>
+                    </div>
+                </div>
+
+                <div class="relative flex justify-center mb-6">
+                    <svg id="viz" viewBox="0 0 440 440" class="w-full max-w-[420px] h-auto">
+                        <g id="history-layer"></g>
+                        <g id="peg-layer"></g>
+                        <g id="label-layer"></g>
+                        <g id="current-layer"></g>
+                    </svg>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="prevStep()" class="py-4 bg-slate-500/10 rounded-2xl font-bold hover:bg-slate-500/20">Back</button>
+                    <button onclick="nextStep()" class="py-4 bg-red-500 text-white rounded-2xl font-bold text-xl hover:bg-red-600 shadow-lg shadow-red-500/20">Next Step</button>
+                </div>
+
+                <div class="mt-6 pt-6 border-t border-slate-500/10 text-center">
+                    <p id="step-counter" class="text-sm font-medium opacity-60 mb-4">Step 0 of 0</p>
+                    <div class="flex justify-center items-center gap-2">
+                        <input type="number" id="jump-to" class="border border-slate-500/30 p-2 w-20 text-center rounded-lg text-sm bg-transparent" placeholder="#">
+                        <button onclick="jumpToStep()" class="text-sm font-bold text-blue-500 hover:text-blue-400">Jump to Step</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let state = { sequence: [], currentIndex: 0, totalPegs: 288, isDarkMode: false };
+        const center = 220;
+        const radius = 180;
+        const labelRadius = 205; 
+
+        window.onload = function() {
+            const saved = localStorage.getItem('stringArtProgress_v5');
+            if (saved) {
+                state = JSON.parse(saved);
+                if(state.isDarkMode) document.body.classList.add('dark-mode');
+                updateThemeIcon();
+                
+                if (state.sequence.length > 0) {
+                    document.getElementById('setup-area').classList.add('hidden');
+                    document.getElementById('controls').classList.remove('hidden');
+                    renderBoard();
+                    redrawHistory();
+                    updateDisplay();
+                }
+            }
+        };
+
+        function toggleDarkMode() {
+            state.isDarkMode = !state.isDarkMode;
+            document.body.classList.toggle('dark-mode');
+            updateThemeIcon();
+            save();
+        }
+
+        function updateThemeIcon() {
+            document.getElementById('theme-icon').innerText = state.isDarkMode ? '☀️' : '🌙';
+        }
+
+        function getCoords(peg, r = radius) {
+            const angle = (peg / state.totalPegs) * 2 * Math.PI;
+            return { x: center + r * Math.cos(angle), y: center + r * Math.sin(angle) };
+        }
+
+        function renderBoard() {
+            const pegLayer = document.getElementById('peg-layer');
+            const labelLayer = document.getElementById('label-layer');
+            pegLayer.innerHTML = '';
+            labelLayer.innerHTML = '';
+
+            // Draw circle background
+            pegLayer.appendChild(createSVG("circle", { cx: center, cy: center, r: radius, class: "circle-base" }));
+
+            for (let i = 0; i < state.totalPegs; i++) {
+                const p = getCoords(i);
+                const lp = getCoords(i, labelRadius);
+                pegLayer.appendChild(createSVG("circle", { cx: p.x, cy: p.y, r: "1.5", class: "peg" }));
+
+                const txt = createSVG("text", {
+                    x: lp.x, y: lp.y + 3, class: "peg-label", id: `label-${i}`,
+                    "font-size": state.totalPegs > 250 ? "6" : "8", "text-anchor": "middle"
+                });
+                txt.textContent = i;
+                labelLayer.appendChild(txt);
+            }
+        }
+
+        function updateDisplay() {
+            const from = state.sequence[state.currentIndex];
+            const to = state.sequence[state.currentIndex + 1];
+            
+            document.getElementById('from-display').innerText = from;
+            document.getElementById('to-display').innerText = (to !== undefined) ? to : "END";
+            document.getElementById('step-counter').innerText = `Step ${state.currentIndex + 1} of ${state.sequence.length - 1}`;
+
+            document.querySelectorAll('#current-layer *, .peg-label.active').forEach(el => {
+                if(el.tagName === 'text') el.classList.remove('active');
+                else el.remove();
+            });
+
+            if (to !== undefined) {
+                const c1 = getCoords(from);
+                const c2 = getCoords(to);
+                document.getElementById('current-layer').appendChild(createSVG("line", { x1: c1.x, y1: c1.y, x2: c2.x, y2: c2.y, class: "current-line" }));
+                [from, to].forEach(p => {
+                    const pos = getCoords(p);
+                    document.getElementById('current-layer').appendChild(createSVG("circle", { cx: pos.x, cy: pos.y, r: "5", class: "active-peg" }));
+                    document.getElementById(`label-${p}`)?.classList.add('active');
+                });
+            }
+            save();
+        }
+
+        function redrawHistory() {
+            const hist = document.getElementById('history-layer');
+            hist.innerHTML = '';
+            for (let i = 0; i < state.currentIndex; i++) {
+                const c1 = getCoords(state.sequence[i]);
+                const c2 = getCoords(state.sequence[i+1]);
+                if (c2) hist.appendChild(createSVG("line", { x1: c1.x, y1: c1.y, x2: c2.x, y2: c2.y, class: "historic-line" }));
+            }
+        }
+
+        function nextStep() {
+            if (state.currentIndex < state.sequence.length - 2) {
+                const c1 = getCoords(state.sequence[state.currentIndex]);
+                const c2 = getCoords(state.sequence[state.currentIndex + 1]);
+                document.getElementById('history-layer').appendChild(createSVG("line", { x1: c1.x, y1: c1.y, x2: c2.x, y2: c2.y, class: "historic-line" }));
+                state.currentIndex++;
+                updateDisplay();
+            }
+        }
+
+        function prevStep() { if (state.currentIndex > 0) { state.currentIndex--; redrawHistory(); updateDisplay(); } }
+        
+        function jumpToStep() {
+            const step = parseInt(document.getElementById('jump-to').value) - 1;
+            if (step >= 0 && step < state.sequence.length - 1) { state.currentIndex = step; redrawHistory(); updateDisplay(); }
+        }
+
+        function startProject() {
+            const raw = document.getElementById('sequence-input').value;
+            const nums = raw.match(/\d+/g);
+            if (!nums || nums.length < 2) return alert("Paste numbers first!");
+            state.sequence = nums.map(Number);
+            state.totalPegs = parseInt(document.getElementById('total-pegs').value) || 288;
+            state.currentIndex = 0;
+            document.getElementById('setup-area').classList.add('hidden');
+            document.getElementById('controls').classList.remove('hidden');
+            renderBoard();
+            updateDisplay();
+        }
+
+        function save() { localStorage.setItem('stringArtProgress_v5', JSON.stringify(state)); }
+        function resetEverything() { if(confirm("Reset everything?")) { localStorage.removeItem('stringArtProgress_v5'); location.reload(); } }
+        function createSVG(type, attrs) {
+            const el = document.createElementNS("http://www.w3.org/2000/svg", type);
+            for (let k in attrs) el.setAttribute(k, attrs[k]);
+            return el;
+        }
+    </script>
+</body>
+</html>
